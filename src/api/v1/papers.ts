@@ -4,6 +4,21 @@ import { exportBibTeX } from '../../utils/bibtex-exporter.js';
 
 const router = Router();
 
+/** 把 Express 的 query 值（string | string[] | ParsedQs…）收敛成字符串。 */
+function queryString(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+  return undefined;
+}
+
+/** 读取整数 query 参数；缺失或无法解析时返回 fallback。 */
+function queryInt(value: unknown, fallback: number): number {
+  const raw = queryString(value);
+  if (raw === undefined) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 /**
  * GET /api/v1/papers - 列表/搜索/筛选
  */
@@ -12,33 +27,40 @@ router.get('/', (req, res) => {
     const db = ReferenceDatabase.getInstance();
     let papers = db.getReferences();
     
-    const { categoryId, q, yearFrom, yearTo, type, hasPdf, page = 1, pageSize = 20 } = req.query;
+    const { categoryId, q, yearFrom, yearTo, type, hasPdf, page, pageSize } = req.query;
+    const pageNum = Math.max(1, queryInt(page, 1));
+    const pageSizeNum = Math.max(1, queryInt(pageSize, 20));
     
     // 筛选
-    if (categoryId) {
-      papers = papers.filter(p => p.folderId === parseInt(categoryId));
+    const categoryFilter = queryInt(categoryId, Number.NaN);
+    if (Number.isFinite(categoryFilter)) {
+      papers = papers.filter(p => p.folderId === categoryFilter);
     }
-    if (q) {
-      const query = q.toLowerCase();
+    const keyword = queryString(q);
+    if (keyword) {
+      const query = keyword.toLowerCase();
       papers = papers.filter(p =>
         p.title?.toLowerCase().includes(query) ||
         p.authors?.some(a => a.toLowerCase().includes(query)) ||
         p.abstract?.toLowerCase().includes(query)
       );
     }
-    if (yearFrom) papers = papers.filter(p => p.year != null && p.year >= parseInt(yearFrom as string));
-    if (yearTo) papers = papers.filter(p => p.year != null && p.year <= parseInt(yearTo as string));
-    if (type) papers = papers.filter(p => p.type === type);
-    if (hasPdf === 'true') papers = papers.filter(p => p.pdfPath);
+    const yearFromNum = queryInt(yearFrom, Number.NaN);
+    if (Number.isFinite(yearFromNum)) papers = papers.filter(p => p.year != null && p.year >= yearFromNum);
+    const yearToNum = queryInt(yearTo, Number.NaN);
+    if (Number.isFinite(yearToNum)) papers = papers.filter(p => p.year != null && p.year <= yearToNum);
+    const typeFilter = queryString(type);
+    if (typeFilter) papers = papers.filter(p => p.type === typeFilter);
+    if (queryString(hasPdf) === 'true') papers = papers.filter(p => p.pdfPath);
     
     // 分页
     const total = papers.length;
-    const start = (parseInt(page) - 1) * parseInt(pageSize);
-    const paged = papers.slice(start, start + parseInt(pageSize));
+    const start = (pageNum - 1) * pageSizeNum;
+    const paged = papers.slice(start, start + pageSizeNum);
     
     res.json({
       data: paged,
-      meta: { page: parseInt(page), pageSize: parseInt(pageSize), total }
+      meta: { page: pageNum, pageSize: pageSizeNum, total }
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

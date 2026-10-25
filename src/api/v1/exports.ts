@@ -9,14 +9,16 @@ const router = Router();
  */
 router.get('/bibtex', (req, res) => {
   try {
-    const { categoryId, includeDescendants = 'false' } = req.query;
+    const categoryIdRaw = req.query.categoryId;
+    const categoryId = typeof categoryIdRaw === 'string'
+      ? Number.parseInt(categoryIdRaw, 10)
+      : Number.NaN;
     const db = ReferenceDatabase.getInstance();
     let papers = db.getReferences();
     
     // 筛选
-    if (categoryId) {
-      const catId = parseInt(categoryId);
-      papers = papers.filter(p => p.folderId === catId);
+    if (Number.isFinite(categoryId)) {
+      papers = papers.filter(p => p.folderId === categoryId);
     }
     
     if (papers.length === 0) {

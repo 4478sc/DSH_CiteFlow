@@ -3,7 +3,18 @@ import multer from 'multer';
 import { readFileSync, unlinkSync } from 'fs';
 import { parseRISWithDiagnostics } from '../../parsers/ris-parser.js';
 import { parseWoSWithDiagnostics } from '../../parsers/wos-parser.js';
+import type { CitationDiagnostic } from '../../parsers/types.js';
 import { ReferenceDatabase } from '../../database/database.js';
+
+/** 单次导入请求的汇总结果。 */
+interface ImportSummary {
+  /** dry-run 时是完整记录，正常导入时是 { id, title, doi }。 */
+  imported: Array<Record<string, unknown>>;
+  updated: Array<{ id: number; title: string }>;
+  skipped: Array<{ title: string; doi?: string; reason: string }>;
+  errors: Array<{ file?: string; title?: string; error: string }>;
+  diagnostics: Array<{ file: string; diagnostics: CitationDiagnostic[] }>;
+}
 
 const router = Router();
 const upload = multer({ 
@@ -16,7 +27,7 @@ const upload = multer({
  * Body (multipart): files[], categoryId, format (auto/ris/wos), duplicatePolicy (skip/update), dryRun
  */
 router.post('/', upload.array('files'), async (req, res) => {
-  const uploadedFiles = req.files || [];
+  const uploadedFiles: Express.Multer.File[] = Array.isArray(req.files) ? req.files : [];
   
   try {
     const { categoryId, format = 'auto', duplicatePolicy = 'skip', dryRun = 'false' } = req.body;
@@ -27,7 +38,7 @@ router.post('/', upload.array('files'), async (req, res) => {
       });
     }
     
-    const results = { 
+    const results: ImportSummary = { 
       imported: [], 
       updated: [],
       skipped: [], 
@@ -101,7 +112,7 @@ router.post('/', upload.array('files'), async (req, res) => {
             } else {
               const refData = {
                 ...record,
-                folderId: categoryId ? parseInt(categoryId) : null,
+                folderId: categoryId ? Number.parseInt(String(categoryId), 10) : undefined,
                 sourceFormat: detectedFormat
               };
               
@@ -110,7 +121,7 @@ router.post('/', upload.array('files'), async (req, res) => {
                 const existing = db.getReferences().find(
                   ref => ref.doi?.toLowerCase() === record.doi?.toLowerCase()
                 );
-                if (existing) {
+                if (existing && typeof existing.id === 'number') {
                   db.updateReference(existing.id, refData);
                   results.updated.push({ id: existing.id, title: record.title });
                   continue;
@@ -123,14 +134,14 @@ router.post('/', upload.array('files'), async (req, res) => {
           } catch (err) {
             results.errors.push({ 
               title: record.title || 'Unknown', 
-              error: err.message 
+              error: err instanceof Error ? err.message : String(err) 
             });
           }
         }
       } catch (err) {
         results.errors.push({ 
           file: file.originalname, 
-          error: err.message 
+          error: err instanceof Error ? err.message : String(err) 
         });
       } finally {
         // 清理上传的临时文件

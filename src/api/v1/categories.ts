@@ -3,6 +3,15 @@ import { ReferenceDatabase } from '../../database/database.js';
 
 const router = Router();
 
+/** 分类树节点（前端 Sidebar 消费的结构）。 */
+interface CategoryNode {
+  id: number | undefined;
+  name: string;
+  parentId: number | null | undefined;
+  children: CategoryNode[];
+  directCount: number;
+}
+
 /**
  * GET /api/v1/categories - 获取所有分类树
  */
@@ -11,14 +20,14 @@ router.get('/', (req, res) => {
     const db = ReferenceDatabase.getInstance();
     const folders = db.getFolders();
     
-    const buildTree = (parentId) => {
+    const buildTree = (parentId: number | null): CategoryNode[] => {
       return folders
-        .filter(f => f.parentId === parentId)
+        .filter(f => (f.parentId ?? null) === parentId)
         .map(f => ({
           id: f.id,
           name: f.name,
           parentId: f.parentId,
-          children: buildTree(f.id),
+          children: buildTree(f.id ?? null),
           directCount: db.getReferences().filter(r => r.folderId === f.id).length
         }));
     };
