@@ -126,11 +126,13 @@ cd client; npm run dev
 4. **`DELETE /api/v1/papers/batch-delete` 不可达**：`papers.ts:107` 的 `delete('/:id')` 注册在 `:180` 的 `delete('/batch-delete')` 之前，Express 先匹配 `/:id`，`parseInt('batch-delete')` → NaN。**把具体路径路由挪到 `/:id` 之前**。前端 `api.ts:652` 已把它当作"可能失败"处理并有逐条删除兜底，所以症状是"批量删除静默变慢"。
 5. **前端末级兜底参数名错**：`api.ts:683` 发 `PATCH /v1/papers/:id { categoryId }`，后端只认 `folderId`，该兜底不会真正移动文献。
 6. **上传文件落在 `uploads/`**：`files.ts:8` 的 multer dest 是 `uploads/`，DB 记录该路径；而 `server.ts` 只静态暴露 `/pdfs`。预览走 `/api/v1/files/:id/content`（流式读取）仍可用，但 `uploads/` 会无限累积。若要长期保存：移动到 `pdfs/` 再更新 `file_path`。
+   > ✅ **已修复（2026-10-25）**：新增 `src/utils/storage.ts`。multer 仍只往 `uploads/` 落临时文件，落盘后立即归档到 `pdfs/<paperId>/<原文件名>`（同名追加 `-1`/`-2`），DB 存**仓库相对路径**（如 `pdfs/3/paper.pdf`），读取统一经 `resolveStoredPath()` 转绝对路径，因此与启动目录无关。删除附件时同步删除实体文件；启动时 `migrateLegacyUploads()` 会把历史 `uploads/` 记录搬到 `pdfs/` 并更新 `file_path`（幂等）。实证：上传 → `pdfs/1/...`、重名 → `-1`、删除 → 实体文件消失、旧记录启动时 `归档 1 个, 失败 0 个`。
 7. **`src/api/v1/categories.ts:14`** 的 `buildTree` 递归无参数/返回类型，strict 下报 `TS7023/TS7024`，需补 `(parentId: number | null): FolderNode[]`。
 
 ### 6.3 P2 — 测试与工程化
 
 8. `test-parsers.js:2-3` 从 `./src/parsers/*.js` 导入（该文件不存在），且硬编码 `F:\大创\...` 绝对路径 → 改为从 `dist/` 导入。
+   > ✅ **已修复（2026-10-25）**：改为从 `./dist/parsers/*.js` 动态导入（缺失时提示先 `npm run build:server` 并以退出码 1 结束），样本分三层：内置合成样本（多记录 / CRLF / 未知类型 / 空内容）→ `samples/` 目录（已收录两个真实样本：`ieee-citation-2022.ris`、`savedrecs-58.ciw`）→ 命令行参数。共 29 项断言，`npm run test:parsers` 现在会先编译再跑，并会校验 `dist/` 不比源码旧。
 9. `integration-test.js` 依赖 `dist/database/database.js`，必须先 `npm run build:server`（`npm run test:integration` 已串好）。
 10. 无 Git 仓库、无 CI、无 lint 配置。建议第一步 `git init` 并提交一次可用基线。
 
@@ -197,3 +199,29 @@ curl -X POST http://localhost:3000/api/v1/exports/bibtex -H "Content-Type: appli
 ## 11. 交接背景
 
 本项目由 4 个子代理并行完成：**架构**（`docs/architecture.md`）、**数据库**（`database.ts` + `schema.sql`）、**解析器**（RIS/WoS + BibTeX）、**前端**（React 三栏 UI）。交付文档堆叠了六份、但未做最终集成构建，因此存在本文件 §6 的落地缺口——接手时请以可执行验证为准，不要以文档中的完成度声明为准。
+
+---
+
+## 12. 变更记录
+
+### 2026-10-25 · 首次集成构建（本节记录已落地的改动）
+
+**Git**：`git init`（分支 `main`），基线提交 `180d3cc` 打了 tag `baseline`，位于所有修复之前，可用于整体回滚（`git reset --hard baseline`）。
+
+**依赖**：`better-sqlite3` 由 `^9.2.2` 升到 `^12.11.1`——本机 Node v24.20.0（ABI 137）+ 无 MSVC Build Tools，v9 无预编译包必然走 node-gyp 源码编译而失败；v12 有预编译包，`prepare/transaction/pragma` 用法未变（实测 SQLite 3.53.2）。已提交 `package-lock.json`。
+
+**P0 修复**（§6.0 中「6 处 `$1/$2`」在本仓库已不存在，`imports.ts` 也早已改用 `references/errors`，实际错误是另一批）：
+- `papers.ts` / `exports.ts`：`req.query` 的 `ParsedQs` 类型收敛（新增 `queryString`/`queryInt`）；
+- `imports.ts`：上传文件收窄为 `Express.Multer.File[]`、`results` 显式标注 `ImportSummary`（消除 `never[]`）、`folderId` 用 `undefined` 代替 `null`、`existing.id` 判空、`catch` 变量 `unknown` 收窄；
+- `categories.ts`：`buildTree` 补 `(parentId: number | null): CategoryNode[]`。
+
+**§6.2-4 路由顺序**：核对为已正确（`/batch-delete` 在 `/:id` 之前），实测 `DELETE .../batch-delete` 返回 `200 {"total":2,"deleted":2}`。
+
+**附件归档**：见 §6.2-6 的修复说明（`src/utils/storage.ts`）。
+
+**测试**：见 §6.3-8 的修复说明；`integration-test.js` 的统计输出改读 `getStatistics()` 真实字段（`references`/`folders`/`files`/`totalFileSize`，原来打印 `undefined`）。
+
+**验收**：`npx tsc --noEmit` 0 错误；`npm run build`（`tsc` + client `tsc --noEmit` + `vite build`）通过；`npm test` 全绿（29 项解析器断言 + 集成测试）；`npm start` 后 `/api/v1/health`、`/api/v1/papers`、真实 RIS/WoS 导入、BibTeX 导出（key 无重复）、静态首页与 legacy `/api/folders` 均正常。
+
+> 沙箱注意：`npm install` / `npm run build` 在 DSH 受限沙箱内会因 `spawn EPERM`（无法派生子进程）失败，与项目本身无关；如需重跑，请用普通终端，或让 agent 在放宽权限下执行。
+
