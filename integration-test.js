@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 /**
  * 快速集成测试 - 验证核心功能
  * 运行: node integration-test.js
@@ -73,8 +73,9 @@ ER  -
   // 7. 统计
   const stats = db.getStatistics();
   console.log('7️⃣  系统统计:');
-  console.log(`   📊 总文献: ${stats.totalReferences}`);
-  console.log(`   📊 总分类: ${stats.totalFolders}\n`);
+  console.log(`   📊 总文献: ${stats.references}`);
+  console.log(`   📊 总分类: ${stats.folders}`);
+  console.log(`   📊 总附件: ${stats.files}（合计 ${stats.totalFileSize} 字节）\n`);
 
   db.close();
   console.log('✨ 所有测试通过！\n');

@@ -11,7 +11,7 @@
     "start": "node dist/server.js",
     "dev": "tsc && node --watch dist/server.js",
     "dev:client": "npm --prefix client run dev",
-    "test:parsers": "node test-parsers.js",
+    "test:parsers": "npm run build:server && node test-parsers.js",
     "test:integration": "npm run build:server && node integration-test.js",
     "test": "npm run test:parsers && npm run test:integration"
   },

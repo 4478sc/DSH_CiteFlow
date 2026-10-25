@@ -1,0 +1,55 @@
+FN Clarivate Analytics Web of Science
+VR 1.0
+PT J
+AU Sharma, PK
+   Nallam, N
+AF Sharma, Prateek Kumar
+   Nallam, Nagarjuna
+TI Breaking the Performance Tradeoffs in N-Path Mixer-First Receivers Using
+   a Second-Order Baseband Noise-Canceling TIA
+SO IEEE JOURNAL OF SOLID-STATE CIRCUITS
+LA English
+DT Article
+DE Baseband noise cancellation; N-path mixer-first receiver; performance
+   tradeoffs; second-order transimpedance amplifier (TIA)
+ID FRONT-END; BAND; GHZ
+AB Input-match, noise figure (NF), in-band ( IB) third- order input-referred intercept point (IIP3), out-of-band (OB) IIP3, and power consumption are five crucial performance metrics of a radio frequency (RF) receiver. In a typical passive mixer-first receiver, these five performance metrics are tightly coupled with each other. In this article, a second-order baseband noise-canceling (NC) scheme is proposed to break the performance tradeoffs in an N-path mixer-first receiver. Analytical expressions for input impedance, NF, IB-IIP3, and OB-IIP3 of the proposed NC receiver are derived and verified. A prototype mixer-first receiver is implemented in CMOS 180 nm technology and tested in the laboratory. In measurements, the receiver achieves an NF less than 4 dB and IB-IIP3 of +14.5 dBm over a frequency range of 0.2-1.2 GHz. The measured OB-IIP3 is +25 dBm at a frequency offset of 2.2 times the bandwidth while consuming a static power of 20 mW.
+C1 [Sharma, Prateek Kumar; Nallam, Nagarjuna] IIT Guwahati, Dept Elect & Elect Engn, Gauhati 781039, India.
+RP Sharma, PK (通讯作者)，IIT Guwahati, Dept Elect & Elect Engn, Gauhati 781039, India.
+EM prateek.sharma@iitg.ac.in
+FU Department of Science and Technology, Government of India
+   [SB/S3/EECE/0211/2015]; Ministry of Electronics and Information
+   Technology (MeitY), Government of India [SMDP-C2SD]
+FX This work was supported in part by the Department of Science and
+   Technology, Government of India, under Grant SB/S3/EECE/0211/2015 and in
+   part by the Ministry of Electronics and Information Technology (MeitY),
+   Government of India, under project SMDP-C2SD.
+NR 30
+TC 8
+Z9 8
+U1 0
+U2 12
+PU IEEE-INST ELECTRICAL ELECTRONICS ENGINEERS INC
+PI PISCATAWAY
+PA 445 HOES LANE, PISCATAWAY, NJ 08855-4141 USA
+SN 0018-9200
+EI 1558-173X
+J9 IEEE J SOLID-ST CIRC
+JI IEEE J. Solid-State Circuit
+PD NOV
+PY 2020
+VL 55
+IS 11
+BP 3009
+EP 3023
+DI 10.1109/JSSC.2020.3005776
+PG 15
+WC Engineering, Electrical & Electronic
+WE Science Citation Index Expanded (SCI-EXPANDED)
+SC Engineering
+GA OJ9KZ
+UT WOS:000584274500014
+DA 2022-10-08
+ER
+
+EF
