@@ -5,6 +5,7 @@ import { parseRISWithDiagnostics } from '../../parsers/ris-parser.js';
 import { parseWoSWithDiagnostics } from '../../parsers/wos-parser.js';
 import type { CitationDiagnostic } from '../../parsers/types.js';
 import { ReferenceDatabase } from '../../database/database.js';
+import { UPLOADS_DIR } from '../../utils/storage.js';
 
 /** 单次导入请求的汇总结果。 */
 interface ImportSummary {
@@ -18,7 +19,7 @@ interface ImportSummary {
 
 const router = Router();
 const upload = multer({ 
-  dest: 'uploads/',
+  dest: UPLOADS_DIR,
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 });
 

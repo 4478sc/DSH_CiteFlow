@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { mkdirSync } from 'fs';
 
 // 导入API路由
 import foldersRouter from './api/routes/folders.js';
@@ -11,6 +12,9 @@ import exportRouter from './api/routes/export.js';
 
 // V1 API路由
 import v1Router from './api/v1/index.js';
+
+import { PDFS_DIR, UPLOADS_DIR, migrateLegacyUploads } from './utils/storage.js';
+import { ReferenceDatabase } from './database/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,7 +28,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 静态文件服务
-app.use('/pdfs', express.static(path.join(__dirname, '../pdfs')));
+app.use('/pdfs', express.static(PDFS_DIR));
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
 // API路由
@@ -46,6 +50,19 @@ app.get('/api/health', (req, res) => {
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
+
+// 附件目录：确保存在，并把历史 uploads/ 记录归档到 pdfs/
+mkdirSync(PDFS_DIR, { recursive: true });
+mkdirSync(UPLOADS_DIR, { recursive: true });
+try {
+  const migration = migrateLegacyUploads(ReferenceDatabase.getInstance());
+  if (migration.moved > 0 || migration.failed > 0) {
+    console.log(`  附件迁移: 归档 ${migration.moved} 个, 失败 ${migration.failed} 个`);
+  }
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`  附件迁移跳过: ${message}`);
+}
 
 app.listen(PORT, () => {
   console.log(`========================================`);

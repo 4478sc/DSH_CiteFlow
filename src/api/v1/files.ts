@@ -2,28 +2,55 @@ import { Router } from 'express';
 import multer from 'multer';
 import { ReferenceDatabase } from '../../database/database.js';
 import { existsSync, createReadStream } from 'fs';
-import { join } from 'path';
+import {
+  UPLOADS_DIR,
+  removeStoredFile,
+  resolveStoredPath,
+  storeUploadedFile,
+} from '../../utils/storage.js';
 
 const router = Router();
-const upload = multer({ dest: 'uploads/' });
+// multer 只负责把上传落到 uploads/ 临时目录，处理完立即归档到 pdfs/<paperId>/。
+const upload = multer({ dest: UPLOADS_DIR });
 
 /**
  * POST /api/v1/papers/:id/files - 上传文件
  */
 router.post('/:paperId/files', upload.single('file'), (req, res) => {
+  const tempPath = req.file?.path;
+  let storedPath: string | null = null;
+
+  const cleanup = (): void => {
+    if (storedPath) removeStoredFile(storedPath);
+    if (tempPath) removeStoredFile(tempPath);
+  };
+
   try {
-    const paperId = parseInt(req.params.paperId);
+    const paperId = Number.parseInt(req.params.paperId, 10);
     const { kind = 'pdf', isPrimary = false } = req.body;
     
     if (!req.file) {
       return res.status(400).json({ error: { code: 'NO_FILE', message: 'No file uploaded' } });
     }
+    if (!Number.isFinite(paperId) || paperId <= 0) {
+      cleanup();
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Invalid paper id' } });
+    }
     
     const db = ReferenceDatabase.getInstance();
+    if (!db.getReferenceById(paperId)) {
+      cleanup();
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Paper not found' } });
+    }
+
+    // 归档到 pdfs/<paperId>/<原文件名>，数据库只记相对路径。
+    const stored = storeUploadedFile(req.file.path, req.file.originalname, paperId);
+    storedPath = stored.filePath;
+
     const fileId = db.attachFile(
       paperId,
-      req.file.originalname,
-      req.file.path,
+      stored.fileName,
+      stored.filePath,
       kind,
       isPrimary === 'true' || isPrimary === true
     );
@@ -31,6 +58,7 @@ router.post('/:paperId/files', upload.single('file'), (req, res) => {
     const file = db.getFiles(paperId).find(f => f.id === fileId);
     res.status(201).json({ data: file });
   } catch (error) {
+    cleanup();
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ error: { code: 'UPLOAD_ERROR', message } });
   }
@@ -78,13 +106,14 @@ router.get('/:id/content', (req, res) => {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'File not found' } });
     }
     
-    if (!existsSync(targetFile.filePath)) {
+    const absolutePath = resolveStoredPath(targetFile.filePath);
+    if (!existsSync(absolutePath)) {
       return res.status(404).json({ error: { code: 'FILE_NOT_FOUND', message: 'File not found on disk' } });
     }
     
-    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Type', targetFile.mimeType ?? 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${targetFile.fileName}"`);
-    createReadStream(targetFile.filePath).pipe(res);
+    createReadStream(absolutePath).pipe(res);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ error: { code: 'DOWNLOAD_ERROR', message } });
@@ -96,9 +125,16 @@ router.get('/:id/content', (req, res) => {
  */
 router.delete('/:id', (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Invalid file id' } });
+    }
+
     const db = ReferenceDatabase.getInstance();
+    const file = db.getFile(id);
     db.deleteFile(id);
+    // 同步删除 pdfs/ 里的实体文件，避免删了记录却留下孤儿文件。
+    if (file) removeStoredFile(file.filePath);
     
     res.status(204).send();
   } catch (error) {
