@@ -99,6 +99,23 @@ CREATE TABLE IF NOT EXISTS "references" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_references_bibtex_key
   ON "references" (bibtex_key COLLATE NOCASE);
+
+-- AI-generated per-paper summaries. Kept separate so existing databases migrate safely.
+CREATE TABLE IF NOT EXISTS paper_summaries (
+  paper_id INTEGER PRIMARY KEY REFERENCES "references"(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL DEFAULT '',
+  contribution TEXT NOT NULL DEFAULT '',
+  method TEXT NOT NULL DEFAULT '',
+  results TEXT NOT NULL DEFAULT '',
+  limitations TEXT NOT NULL DEFAULT '',
+  reflection TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'ready' CHECK (status IN ('pending','running','ready','error')),
+  error TEXT,
+  model TEXT,
+  generated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_paper_summaries_updated_at ON paper_summaries(updated_at);
 CREATE INDEX IF NOT EXISTS idx_references_folder_id ON "references" (folder_id);
 CREATE INDEX IF NOT EXISTS idx_references_type ON "references" (type);
 CREATE INDEX IF NOT EXISTS idx_references_year ON "references" (year);

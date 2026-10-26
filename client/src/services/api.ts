@@ -5,6 +5,7 @@ import type {
   Folder,
   ImportKind,
   ImportResult,
+  Insight,
   Reference,
   ReferenceType,
   SortKey,
@@ -164,6 +165,19 @@ function normalizeReference(input: Record<string, unknown>, index: number): Refe
     primaryFile?.id != null || firstFile?.id != null
       ? `/api/v1/files/${primaryFile?.id ?? firstFile?.id}/content`
       : undefined;
+  // 有 files 字段时以附件表为准，避免 references.pdf_path 残留导致“Open PDF”指向已删除文件。
+  const derivedPdfPath = files.length
+    ? asString(
+        fileUrl ??
+          primaryFile?.filePath ??
+          primaryFile?.path ??
+          firstFile?.filePath ??
+          firstFile?.path,
+      )
+    : undefined;
+  const pdfPath = Array.isArray(input.files)
+    ? derivedPdfPath
+    : asString(input.pdfPath ?? input.pdf_path ?? derivedPdfPath);
   const rawCategoryId =
     input.categoryId ?? input.category_id ?? input.folderId ?? input.folder_id;
   const rawKeywords = input.keywords;
@@ -192,15 +206,7 @@ function normalizeReference(input: Record<string, unknown>, index: number): Refe
     publisher: asString(input.publisher),
     address: asString(input.address),
     school: asString(input.school ?? input.institution),
-    pdfPath: asString(
-      input.pdfPath ??
-        input.pdf_path ??
-        fileUrl ??
-        primaryFile?.filePath ??
-        primaryFile?.path ??
-        firstFile?.filePath ??
-        firstFile?.path,
-    ),
+    pdfPath,
     categoryId: rawCategoryId != null ? Number(rawCategoryId) : null,
     importedFrom: asString(input.importedFrom ?? input.imported_from ?? input.importSource),
     createdAt: asString(input.createdAt ?? input.created_at),
@@ -551,6 +557,51 @@ export const api = {
     );
   },
 
+  /** 把 PDF 挂到已有文献上（不会新建文献）；已有 PDF 会被新文件替换。 */
+  async attachPdfToPaper(paperId: number, file: File): Promise<{ replaced: number }> {
+    const previous = await http
+      .get(`/v1/files/${paperId}/files`)
+      .then((response) => {
+        const list = (response.data as { data?: unknown } | undefined)?.data;
+        return Array.isArray(list) ? (list as Array<Record<string, unknown>>) : [];
+      })
+      .catch(() => [] as Array<Record<string, unknown>>);
+    const endpoints = [`/v1/files/${paperId}/files`, `/v1/papers/${paperId}/files`];
+    let lastError: unknown;
+    for (const endpoint of endpoints) {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('kind', 'pdf');
+      form.append('isPrimary', 'true');
+      try {
+        await http.post(endpoint, form, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 120000,
+        });
+        let replaced = 0;
+        for (const item of previous) {
+          const id = Number(item.id);
+          const isPdf =
+            String(item.fileType ?? '').toLowerCase() === 'pdf' ||
+            /\.pdf$/i.test(String(item.fileName ?? item.filePath ?? ''));
+          if (!Number.isFinite(id) || id <= 0 || !isPdf) continue;
+          try {
+            await http.delete(`/v1/files/${id}`);
+            replaced += 1;
+          } catch {
+            // 旧附件删不掉不影响新附件，忽略
+          }
+        }
+        return { replaced };
+      } catch (error) {
+        lastError = error;
+        if (isMissingRoute(error)) continue;
+        throw error;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new UnavailableApi('File upload endpoint is unavailable');
+  },
+
   async getReferences(
     categoryId?: number | null,
     search = '',
@@ -773,5 +824,15 @@ export const api = {
 
   errorMessage,
 };
+
+export async function getPaperInsight(id: number): Promise<Insight> {
+  const response = await http.get<{ data: Insight }>(`/v1/insights/papers/${id}`);
+  return response.data.data;
+}
+
+export async function startPaperInsight(id: number): Promise<Insight> {
+  const response = await http.post<{ data: Insight }>(`/v1/insights/papers/${id}`);
+  return response.data.data;
+}
 
 export default api;

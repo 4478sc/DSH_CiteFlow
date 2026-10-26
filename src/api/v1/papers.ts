@@ -1,6 +1,17 @@
+import { rmdirSync } from 'node:fs';
+import path from 'node:path';
 import { Router } from 'express';
 import { ReferenceDatabase } from '../../database/database.js';
 import { exportBibTeX } from '../../utils/bibtex-exporter.js';
+import { PDFS_DIR, removeStoredFile } from '../../utils/storage.js';
+
+/** 删除文献时一并清理磁盘附件，否则 pdfs/<id>/ 会留下孤儿文件。 */
+function deletePaper(db: ReferenceDatabase, id: number): void {
+  const files = db.getFiles(id);
+  db.deleteReference(id);
+  for (const file of files) removeStoredFile(file.filePath);
+  try { rmdirSync(path.join(PDFS_DIR, String(id))); } catch { /* 目录非空或不存在都无所谓 */ }
+}
 
 const router = Router();
 
@@ -138,7 +149,7 @@ router.delete('/batch-delete', (req, res) => {
     
     for (const id of paperIds) {
       try {
-        db.deleteReference(id);
+        deletePaper(db, id);
         deleted++;
       } catch (err) {
         console.error(`Failed to delete paper ${id}:`, err);
@@ -221,7 +232,7 @@ router.delete('/:id', (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const db = ReferenceDatabase.getInstance();
-    db.deleteReference(id);
+    deletePaper(db, id);
     
     res.status(204).send();
   } catch (error) {

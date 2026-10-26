@@ -18,6 +18,23 @@ export interface Folder {
   createdAt?: string;
 }
 
+export interface Insight {
+  id?: number;
+  /** 后端判断该论文是否已有 PDF 附件；没有 PDF 时不允许生成。 */
+  hasPdf?: boolean;
+  status: 'none' | 'pending' | 'running' | 'ready' | 'error';
+  purpose?: string;
+  contribution?: string;
+  method?: string;
+  results?: string;
+  limitations?: string;
+  reflection?: string;
+  model?: string;
+  generatedAt?: string;
+  updatedAt?: string;
+  error?: string | null;
+}
+
 export interface Reference {
   id: number;
   type: ReferenceType;

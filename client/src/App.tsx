@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import ReferenceList from './components/ReferenceList';
@@ -296,6 +296,26 @@ export default function App() {
     setImportOpen(true);
   };
 
+  // 附件挂到“当前打开的文献”上；不要走导入流程，否则会新建一条文献。
+  const attachInputRef = useRef<HTMLInputElement | null>(null);
+  const handleAttachPdf = () => {
+    if (!selectedReference?.id) return;
+    attachInputRef.current?.click();
+  };
+  const handleAttachFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    const target = selectedReference;
+    if (!file || !target?.id) return;
+    try {
+      const result = await api.attachPdfToPaper(target.id, file);
+      setReloadToken((current) => current + 1);
+      addToast('success', result.replaced > 0 ? 'PDF 已替换' : 'PDF 已附加', file.name);
+    } catch (error) {
+      addToast('error', '附加 PDF 失败', api.errorMessage(error));
+    }
+  };
+
   const handleImport = async (
     kind: ImportKind,
     file: File,
@@ -421,8 +441,16 @@ export default function App() {
       <ReferenceDetail
         reference={selectedReference}
         onClose={() => setSelectedReferenceId(null)}
-        onAttachPdf={() => openImport('pdf')}
+        onAttachPdf={handleAttachPdf}
         onNotify={addToast}
+      />
+
+      <input
+        ref={attachInputRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        hidden
+        onChange={(event) => void handleAttachFile(event)}
       />
 
       <ImportDialog

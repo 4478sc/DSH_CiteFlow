@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpRight,
   BookOpen,
@@ -11,12 +11,15 @@ import {
   FileText,
   Hash,
   Link2,
+  Loader2,
   PanelRightClose,
+  Sparkles,
   Quote,
   Star,
   X,
 } from 'lucide-react';
-import type { Reference, ToastKind } from '../types';
+import type { Insight, Reference, ToastKind } from '../types';
+import api, { getPaperInsight, startPaperInsight } from '../services/api';
 import {
   typeAbbreviation,
   typeLabels,
@@ -43,12 +46,120 @@ export default function ReferenceDetail({
   const [abstractExpanded, setAbstractExpanded] = useState(false);
   const [citationFormat, setCitationFormat] = useState<'apa' | 'bibtex'>('apa');
   const [copied, setCopied] = useState<string | null>(null);
+  const [insight, setInsight] = useState<Insight | null>(null);
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [insightBusy, setInsightBusy] = useState(false);
+  const [insightOpen, setInsightOpen] = useState(false);
+  // 只有带 PDF 附件的论文才允许生成归纳（后端同样会校验）。
+  const hasPdf = insight?.hasPdf ?? Boolean(reference?.pdfPath);
+  const pollTimer = useRef<number | null>(null);
+  const pollTimeout = useRef<number | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollTimer.current != null) {
+      window.clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+    if (pollTimeout.current != null) {
+      window.clearTimeout(pollTimeout.current);
+      pollTimeout.current = null;
+    }
+  }, []);
+
+  const startPolling = useCallback(
+    (paperId: number) => {
+      stopPolling();
+      const tick = async () => {
+        try {
+          const next = await getPaperInsight(paperId);
+          setInsight((current) =>
+            current && current.id === paperId ? { ...next, id: paperId } : current,
+          );
+          if (next.status === 'ready' || next.status === 'error') {
+            setInsightBusy(false);
+            if (next.status === 'ready') setInsightOpen(true);
+            stopPolling();
+          }
+        } catch {
+          // Keep polling until the timeout below ends the loop.
+        }
+      };
+      pollTimer.current = window.setInterval(() => void tick(), 2000);
+      pollTimeout.current = window.setTimeout(() => {
+        setInsight((current) =>
+          current && current.id === paperId
+            ? { ...current, status: 'error', error: '归纳生成超时，请稍后重试。' }
+            : current,
+        );
+        setInsightBusy(false);
+        stopPolling();
+      }, 300000);
+    },
+    [stopPolling],
+  );
 
   useEffect(() => {
-    setAbstractExpanded(false);
-    setCitationFormat('apa');
-    setCopied(null);
-  }, [reference?.id]);
+    let active = true;
+    stopPolling();
+    setInsightBusy(false);
+    setInsightOpen(false);
+    if (!reference) {
+      setInsight(null);
+      setInsightLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+    const paperId = reference.id;
+    setInsight(null);
+    setInsightLoading(true);
+    getPaperInsight(paperId)
+      .then((value) => {
+        if (active) setInsight({ ...value, id: paperId });
+      })
+      .catch(() => {
+        if (active) setInsight({ status: 'none', id: paperId });
+      })
+      .finally(() => {
+        if (active) setInsightLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [reference?.id, stopPolling]);
+
+  useEffect(() => {
+    if (!reference || insight?.id !== reference.id) return;
+    if (insight.status === 'pending' || insight.status === 'running') {
+      setInsightBusy(true);
+      startPolling(reference.id);
+    }
+  }, [reference?.id, insight?.id, insight?.status, startPolling]);
+
+  useEffect(() => () => stopPolling(), [stopPolling]);
+
+  const handleGenerateInsight = async () => {
+    if (!reference || insightBusy) return;
+    if (!hasPdf) {
+      onNotify('info', '无法生成归纳', '该论文还没有 PDF 附件，请先上传 PDF。');
+      return;
+    }
+    setInsightBusy(true);
+    try {
+      const started = await startPaperInsight(reference.id);
+      setInsight({
+        ...started,
+        id: reference.id,
+        status: started.status === 'ready' ? 'ready' : 'pending',
+      });
+      if (started.status === 'ready') setInsightOpen(true);
+      onNotify('success', '归纳生成已开始', '请稍候，归纳完成后会自动显示。');
+      startPolling(reference.id);
+    } catch (error) {
+      setInsightBusy(false);
+      onNotify('error', '归纳生成失败', api.errorMessage(error));
+    }
+  };
 
   const abstract = reference?.abstract ?? '';
   const abstractIsLong = abstract.length > 420;
@@ -111,6 +222,8 @@ export default function ReferenceDetail({
     ['Import source', reference.importedFrom],
   ];
   const visibleDetails = details.filter(([, value]) => Boolean(value));
+  const insightGenerating =
+    insightBusy || insight?.status === 'pending' || insight?.status === 'running';
 
   return (
     <aside className="detail-panel" aria-label="Reference details">
@@ -153,13 +266,23 @@ export default function ReferenceDetail({
 
         <div className="detail-actions-row">
           {pdfUrl ? (
-            <a className="button button-accent detail-primary-action" href={pdfUrl} target="_blank" rel="noreferrer">
-              <FileText size={15} />
-              Open PDF
-              <ArrowUpRight size={13} />
-            </a>
+            <>
+              <a className="button button-accent detail-primary-action" href={pdfUrl} target="_blank" rel="noreferrer">
+                <FileText size={15} />
+                Open PDF
+                <ArrowUpRight size={13} />
+              </a>
+              <button
+                className="button button-quiet detail-copy-action"
+                onClick={onAttachPdf}
+                title="上传新的 PDF 并替换当前附件"
+              >
+                <FilePlus2 size={14} />
+                替换 PDF
+              </button>
+            </>
           ) : (
-            <button className="button button-accent detail-primary-action" onClick={onAttachPdf}>
+            <button className="button button-accent detail-primary-action" onClick={onAttachPdf} title="上传 PDF 附件">
               <FilePlus2 size={15} />
               Attach PDF
             </button>
@@ -167,6 +290,15 @@ export default function ReferenceDetail({
           <button className="button button-quiet detail-copy-action" onClick={() => void handleCopy(citation, 'citation')}>
             {copied === 'citation' ? <Check size={14} /> : <Copy size={14} />}
             {copied === 'citation' ? 'Copied' : 'Cite'}
+          </button>
+          <button
+            className="button button-quiet detail-copy-action"
+            onClick={() => void handleGenerateInsight()}
+            disabled={insightGenerating || !hasPdf}
+            title={hasPdf ? '根据论文 PDF 生成六字段归纳' : '该论文还没有 PDF 附件，请先上传 PDF'}
+          >
+            {insightGenerating ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}
+            {insightGenerating ? '生成中…' : insight?.status === 'ready' ? '重新归纳' : '生成归纳'}
           </button>
         </div>
 
@@ -184,6 +316,66 @@ export default function ReferenceDetail({
             <p className={`abstract-text ${abstractIsLong && !abstractExpanded ? 'is-clamped' : ''}`}>{abstract}</p>
           ) : (
             <p className="abstract-empty">No abstract has been added for this reference.</p>
+          )}
+        </section>
+
+        <section className="detail-section insight-section" aria-live="polite">
+          <div className="section-title-row">
+            <h3>AI 归纳</h3>
+            {insight?.status === 'ready' && (
+              <button
+                className="text-button"
+                onClick={() => setInsightOpen((value) => !value)}
+                aria-expanded={insightOpen}
+              >
+                {insightOpen ? '收起' : '查看归纳'}
+                <ChevronDown size={12} className={insightOpen ? 'chevron-open' : ''} />
+              </button>
+            )}
+          </div>
+          {insightLoading ? (
+            <p className="abstract-empty">正在读取归纳…</p>
+          ) : insight?.status === 'ready' ? (
+            insightOpen ? (
+              <div className="insight-preview">
+                {[
+                  ['目的', insight.purpose],
+                  ['贡献', insight.contribution],
+                  ['方法', insight.method],
+                  ['结果', insight.results],
+                  ['局限', insight.limitations],
+                  ['感想 / 可复用点', insight.reflection],
+                ].map(([label, value]) => (
+                  <div className="insight-field" key={label}>
+                    <span>{label}</span>
+                    <p>{value || '未提及'}</p>
+                  </div>
+                ))}
+                <div className="insight-meta">
+                  <Sparkles size={11} />
+                  {insight.model || 'AI'}
+                  {insight.generatedAt && (
+                    <>
+                      <span className="provenance-dot" />
+                      {formatDate(insight.generatedAt)}
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="abstract-empty">归纳已生成，点击“查看归纳”展开六个字段。</p>
+            )
+          ) : insightGenerating ? (
+            <p className="insight-status">
+              <Loader2 size={12} className="spin" />
+              正在阅读 PDF 并生成归纳，通常需要 1–3 分钟…
+            </p>
+          ) : insight?.status === 'error' ? (
+            <p className="abstract-empty is-error">生成失败：{insight.error || '请稍后重试。'}</p>
+          ) : !hasPdf ? (
+            <p className="abstract-empty">该论文还没有 PDF 附件，请先上传 PDF 后再生成归纳（归纳需要读取原文）。</p>
+          ) : (
+            <p className="abstract-empty">尚未生成归纳，点击上方“生成归纳”。</p>
           )}
         </section>
 

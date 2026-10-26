@@ -2129,6 +2129,70 @@ pre {
   line-height: 1.7;
 }
 
+/* AI paper summary (归纳) */
+.insight-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.095);
+  border-radius: 8px;
+  background:
+    linear-gradient(140deg, rgba(56, 189, 248, 0.035), transparent 48%),
+    rgba(8, 16, 30, 0.48);
+}
+
+.insight-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.insight-field span {
+  color: #657b93;
+  font-size: 8.2px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.insight-field p {
+  color: #aebccc;
+  font-size: 10.4px;
+  font-weight: 400;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.insight-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #7e93aa;
+  font-size: 9.8px;
+  line-height: 1.6;
+}
+
+.insight-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.055);
+  color: #50647b;
+  font-size: 8.3px;
+  line-height: 1.5;
+}
+
+.abstract-empty.is-error {
+  color: #fca5a5;
+  font-style: normal;
+}
+
 .keyword-list {
   display: flex;
   flex-wrap: wrap;

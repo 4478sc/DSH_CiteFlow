@@ -1,10 +1,11 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import categoriesRouter from './categories.js';
 import papersRouter from './papers.js';
 import filesRouter from './files.js';
 import importsRouter from './imports.js';
 import exportsRouter from './exports.js';
 import healthRouter from './health.js';
+import insightsRouter from './insights.js';
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use('/files', filesRouter);
 router.use('/imports', importsRouter);
 router.use('/exports', exportsRouter);
 router.use('/health', healthRouter);
+router.use('/insights', insightsRouter);
 
 export default router;
