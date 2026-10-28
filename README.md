@@ -32,7 +32,7 @@
 **后端** — Express 4 · better-sqlite3 12 · TypeScript 5（`strict`）· 纯 ESM（相对导入必须带 `.js` 后缀）
 **前端** — React 18 · Vite 5 · Axios · lucide-react · 手写 CSS（无 Ant Design / Tailwind）
 **存储** — SQLite（WAL 模式）· 文件系统存 PDF
-**AI** — DeepSeek Harness CLI（`dsh`）headless 模式，可选接入；不配置也能正常使用其他功能
+**AI** — DeepSeek Harness CLI（`dsh`）headless 模式 + `dsh-plugin-subscriptions`（Codex 订阅账号），可选接入；不配置也能正常使用其他功能
 
 ## 快速开始
 
@@ -62,8 +62,10 @@ npm --prefix client run dev                          # 终端 2：前端 :5173�
 **启用前提**
 
 1. 本机装有 DeepSeek Harness，且能运行 `dsh`（headless profile）；
-2. 该 Harness 已配置可用的模型凭据（`~/.dsh/.credentials.yaml` 或环境变量中的 API key）；
+2. 已安装并登录订阅插件 [`dsh-plugin-subscriptions`](https://github.com/V1ki/dsh-plugin-subscriptions)（在 Web 端 Settings → Subscriptions 登录 Codex，token 落在 `~/.dsh/plugins/subscriptions/`，headless 共享）；
 3. 论文已上传 PDF —— 没有 PDF 时接口直接返回 `409 PDF_REQUIRED`，前端按钮也会禁用。
+
+默认路由是**订阅插件里的 Codex `gpt-6.1-sol`**：每次调用会生成一层 `--patch` 覆盖层，把插件挂成 `llm-subscriptions` 并把默认模型指向 `provider: codex`。插件未安装时自动退回本机 OpenAI 兼容网关（`openai` provider），并在后端日志打印一行提示。
 
 **配置项（都是环境变量，均可不设）**
 
@@ -71,9 +73,10 @@ npm --prefix client run dev                          # 终端 2：前端 :5173�
 |---|---|---|
 | `DSH_CLI` | `dsh`（PATH） | Harness 启动器路径；也可写进 `data/dsh-cli.txt`（本机配置，不入库） |
 | `DSH_PROFILE` | — | 固定使用 `headless`，无需设置 |
-| `DSH_INSIGHT_PROVIDER` | `openai` | 模型 provider 名（`openai` / `aicodemirror1` / `opencode-go`…） |
+| `DSH_INSIGHT_PROVIDER` | `codex` | provider 名（`codex` 订阅 / `openai` 网关 / `aicodemirror1` / `opencode-go`） |
 | `DSH_INSIGHT_MODEL` | `gpt-6.1-sol` | 模型 id |
-| `DSH_INSIGHT_BASE_URL` | `http://127.0.0.1:18080/v1` | `openai` provider 的兼容网关地址 |
+| `DSH_INSIGHT_PLUGIN` | 自动探测 | `dsh-plugin-subscriptions` 的 `lib/index.js` 绝对路径；默认从 `~/.dsh/profiles/*/node_modules/` 里找 |
+| `DSH_INSIGHT_BASE_URL` | `http://127.0.0.1:18080/v1` | 仅 `openai` provider 使用的兼容网关地址 |
 | `DSH_INSIGHT_API_KEY_ENV` | 按 provider 推断 | 指向凭据里对应的环境变量名 |
 | `DSH_TIMEOUT_MS` | `420000` | 单篇生成超时（读 PDF 全文通常 1–3 分钟） |
 | `DSH_WORKDIR` | `data/dsh-tmp` | 覆盖层与工作目录；每篇论文用硬链接副本 `paper-<id>/`，不污染 `pdfs/` |
