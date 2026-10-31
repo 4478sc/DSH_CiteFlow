@@ -264,6 +264,26 @@ export default function App() {
     }
   };
 
+  const handleCopySelected = async (folderId: number | null) => {
+    const ids = [...checkedIds];
+    if (ids.length === 0) return;
+    try {
+      const copied = await api.copyReferences(ids, folderId);
+      setDataSource(getDataSource());
+      setCheckedIds(new Set());
+      setReloadToken((current) => current + 1);
+      await refreshFolders();
+      const destination = folderId == null ? 'All References' : findFolder(folders, folderId)?.name ?? 'the collection';
+      addToast(
+        'success',
+        `${copied.length || ids.length} ${ids.length === 1 ? 'reference' : 'references'} copied`,
+        `Copies added to ${destination}; originals untouched.`,
+      );
+    } catch (error) {
+      addToast('error', 'Could not copy references', api.errorMessage(error));
+    }
+  };
+
   const handleDeleteSelected = () => {
     if (checkedIds.size > 0) setDeleteIds([...checkedIds]);
   };
@@ -428,6 +448,7 @@ export default function App() {
         onAddPdf={() => openImport('pdf')}
         onExport={handleExport}
         onMoveSelected={handleMoveSelected}
+        onCopySelected={handleCopySelected}
         onDeleteSelected={handleDeleteSelected}
         onOpenSidebar={() => setSidebarOpen(true)}
       />

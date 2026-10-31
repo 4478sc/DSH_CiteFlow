@@ -21,6 +21,7 @@
 |---|---|
 | 引文导入 | RIS（EndNote / IEEE Xplore）与 WoS `.ciw`；自动识别格式；DOI 去重（`skip` / `update`）；支持 `dryRun` 预演 |
 | 分类管理 | 任意层级分类树，同级重名唯一、防环触发器；支持拖拽移动、批量移动 |
+| 批量复制 | 「Copy to」把选中文献复制到目标分类（原文献保留，附件用硬链接/复制落到新记录的 `pdfs/<新id>/`） |
 | PDF 附件 | 上传后归档到 `pdfs/<文献ID>/`，每条文献最多一个主附件；「替换 PDF」会先挂新文件再删除旧附件 |
 | AI 归纳 | 逐篇生成 **目的 / 贡献 / 方法 / 结果 / 局限 / 感想** 六个中文字段，结果持久化；**必须先有 PDF 附件**（模型要读原文） |
 | BibTeX 导出 | 按分类或按选中条目导出；LaTeX 特殊字符转义、BibTeX key 生成（`作者+年份+标题词`） |
@@ -96,6 +97,7 @@ src/
   database/schema.sql      # 运行时真源（docs/schema.sql 是设计稿，已不同步）
   parsers/{ris,wos}-parser.ts   # 返回 { references, errors, warnings }
   services/dsh-runner.ts   # 调用 dsh headless：覆盖层、PDF 工作目录、NDJSON 解析
+  services/reference-copy.ts # 复制文献到分类（含附件硬链接/复制）
   utils/bibtex-exporter.ts # 导出、转义、key 生成
   utils/storage.ts         # 附件归档 pdfs/、历史 uploads/ 迁移
   api/v1/*.ts              # 规范 API（categories / papers / files / imports / exports / insights / health）
@@ -122,6 +124,7 @@ samples/                   # 真实样本（测试用）
 | GET | `/api/v1/papers/:id` | 详情（含附件） |
 | POST/PATCH/DELETE | `/api/v1/papers[/:id]` | 增删改文献；删除时一并清理附件实体文件 |
 | PATCH | `/api/v1/papers/batch-move` | 批量移动（`paperIds`, `categoryId`） |
+| POST | `/api/v1/papers/batch-copy` | 批量复制到分类，返回新 id 列表（`paperIds`, `categoryId`） |
 | DELETE | `/api/v1/papers/batch-delete` | 批量删除（`paperIds`） |
 | POST | `/api/v1/imports` | 导入（multipart：`files`, `format`, `duplicatePolicy`, `dryRun`） |
 | GET/POST | `/api/v1/exports/bibtex` | 按分类 / 按 `paperIds` 导出 BibTeX |

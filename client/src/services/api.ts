@@ -740,6 +740,22 @@ export const api = {
       () => demoStore.moveReferences(ids, categoryId),
     );
   },
+  /** 复制到分类：原文献保留，目标分类新增独立副本（含附件）。返回新文献 id。 */
+  async copyReferences(ids: number[], categoryId: number | null): Promise<number[]> {
+    return withCandidates(
+      [
+        async () => {
+          const response = await http.post('/v1/papers/batch-copy', {
+            paperIds: ids,
+            categoryId,
+          });
+          const data = (response.data as { data?: { ids?: unknown } } | undefined)?.data;
+          return Array.isArray(data?.ids) ? (data.ids as number[]) : [];
+        },
+      ],
+      () => demoStore.copyReferences(ids, categoryId),
+    );
+  },
   async importFile(
     kind: ImportKind,
     file: File,

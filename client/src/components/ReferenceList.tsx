@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Copy,
   Download,
   FilePlus2,
   FolderInput,
@@ -57,6 +58,7 @@ interface ReferenceListProps {
   onAddPdf: () => void;
   onExport: (ids?: number[]) => void;
   onMoveSelected: (folderId: number | null) => Promise<void>;
+  onCopySelected: (folderId: number | null) => Promise<void>;
   onDeleteSelected: () => void;
   onOpenSidebar: () => void;
 }
@@ -82,13 +84,15 @@ export default function ReferenceList({
   onAddPdf,
   onExport,
   onMoveSelected,
+  onCopySelected,
   onDeleteSelected,
   onOpenSidebar,
 }: ReferenceListProps) {
   const searchRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [openMenu, setOpenMenu] = useState<'sort' | 'move' | null>(null);
+  const [openMenu, setOpenMenu] = useState<'sort' | 'move' | 'copy' | null>(null);
   const [moving, setMoving] = useState(false);
+  const [copying, setCopying] = useState(false);
 
   const flatFolders = useMemo(() => flattenFolders(folders), [folders]);
   const folderDepth = useMemo(() => {
@@ -147,6 +151,16 @@ export default function ReferenceList({
       setOpenMenu(null);
     } finally {
       setMoving(false);
+    }
+  };
+
+  const chooseCopyTarget = async (folderId: number | null) => {
+    setCopying(true);
+    try {
+      await onCopySelected(folderId);
+      setOpenMenu(null);
+    } finally {
+      setCopying(false);
     }
   };
 
@@ -293,6 +307,39 @@ export default function ReferenceList({
                         style={{ paddingLeft: `${12 + (folderDepth.get(folder.id) ?? 0) * 14}px` }}
                         onClick={() => void chooseMoveTarget(folder.id)}
                         disabled={moving}
+                      >
+                        <FolderOpen size={14} />
+                        {folder.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="menu-anchor">
+                <button
+                  className="bulk-button"
+                  onClick={() => setOpenMenu((current) => (current === 'copy' ? null : 'copy'))}
+                  aria-expanded={openMenu === 'copy'}
+                >
+                  <Copy size={14} />
+                  Copy to
+                  <ChevronDown size={12} />
+                </button>
+                {openMenu === 'copy' && (
+                  <div className="control-dropdown move-dropdown">
+                    <div className="dropdown-label">Copy {checkedCount} to</div>
+                    <button className="move-option" onClick={() => void chooseCopyTarget(null)} disabled={copying}>
+                      <Library size={14} />
+                      All References
+                    </button>
+                    <div className="dropdown-separator" />
+                    {flatFolders.map((folder) => (
+                      <button
+                        key={folder.id}
+                        className="move-option"
+                        style={{ paddingLeft: `${12 + (folderDepth.get(folder.id) ?? 0) * 14}px` }}
+                        onClick={() => void chooseCopyTarget(folder.id)}
+                        disabled={copying}
                       >
                         <FolderOpen size={14} />
                         {folder.name}

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { Router } from 'express';
 import { ReferenceDatabase } from '../../database/database.js';
 import { exportBibTeX } from '../../utils/bibtex-exporter.js';
+import { copyReferenceToFolder } from '../../services/reference-copy.js';
 import { PDFS_DIR, removeStoredFile } from '../../utils/storage.js';
 
 /** 删除文献时一并清理磁盘附件，否则 pdfs/<id>/ 会留下孤儿文件。 */
@@ -126,6 +127,46 @@ router.patch('/batch-move', (req, res) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message } });
+  }
+});
+
+/**
+ * POST /api/v1/papers/batch-copy - 批量复制到分类（保留原文献）
+ * Body: { paperIds: number[], categoryId: number | null }
+ */
+router.post('/batch-copy', async (req, res) => {
+  try {
+    const { paperIds, categoryId = null } = (req.body ?? {}) as {
+      paperIds?: unknown;
+      categoryId?: unknown;
+    };
+    if (!Array.isArray(paperIds) || paperIds.length === 0) {
+      return res.status(400).json({
+        error: { code: 'INVALID_INPUT', message: 'paperIds must be a non-empty array' },
+      });
+    }
+    const folderId =
+      categoryId === null || categoryId === undefined ? null : Number(categoryId);
+    if (folderId !== null && (!Number.isFinite(folderId) || folderId <= 0)) {
+      return res.status(400).json({
+        error: { code: 'INVALID_INPUT', message: 'categoryId must be a positive integer or null' },
+      });
+    }
+
+    const db = ReferenceDatabase.getInstance();
+    const ids: number[] = [];
+    for (const id of paperIds) {
+      try {
+        ids.push(await copyReferenceToFolder(db, Number(id), folderId));
+      } catch (err) {
+        console.error(`Failed to copy paper ${id}:`, err);
+      }
+    }
+
+    return res.status(201).json({ data: { total: paperIds.length, copied: ids.length, ids } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message } });
   }
 });
 

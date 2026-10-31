@@ -863,6 +863,17 @@ export const demoStore = {
       ids.includes(reference.id) ? { ...reference, categoryId: folderId } : reference,
     );
   },
+  copyReferences: (ids: number[], folderId: number | null): number[] => {
+    const copies = references
+      .filter((reference) => ids.includes(reference.id))
+      .map((reference) => ({
+        ...cloneReference(reference),
+        id: nextReferenceId++,
+        categoryId: folderId,
+      }));
+    references = [...copies, ...references];
+    return copies.map((copy) => copy.id);
+  },
   importFile,
   exportBibtex,
 };
